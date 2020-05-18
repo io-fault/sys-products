@@ -1,0 +1,17 @@
+! CONTEXT:
+	/protocol/
+		&<http://if.fault.io/project/information>
+
+/identifier/
+	&<http://fault.io/engineering/products>
+/name/
+	`products`
+/abstract/
+	Project set management and processing tools.
+/icon/
+	- (emoji)`📦`
+
+/controller/
+	`fault.io`
+/contact/
+	&<http://fault.io/critical>
