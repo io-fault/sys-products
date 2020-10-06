@@ -3,7 +3,7 @@
 		&<http://if.fault.io/project/information>
 
 /identifier/
-	&<http://fault.io/engineering/products>
+	&<http://fault.io/integration/products>
 /icon/
 	- (emoji)`📦`
 /name/
