@@ -30,7 +30,7 @@ def plan_build(command, ccontext:files.Path, intention:str, cache:files.Path, ar
 	dims = (str(project),)
 	xid = '/'.join(dims)
 
-	ki = KInvocation(exepath, [exepath, str(cache), str(pj.product.route), str(project)] + argv)
+	ki = KInvocation(exepath, [exepath, str(ccontext), str(cache), str(pj.product.route), str(project)] + argv)
 	yield ('FPI', dims, xid, None, ki)
 
 def plan_test(intention:str, argv, pcontext:root.Context, identifier):
@@ -54,7 +54,7 @@ def plan_test(intention:str, argv, pcontext:root.Context, identifier):
 		env = dict(os.environ)
 		env['FACTORPATH'] = '/x/redirect-fault:' + os.environ['PRODUCT']
 		env['PROJECT'] = str(project)
-		ki = execution.KInvocation(exepath, cmd, environ=env)
+		ki = KInvocation(exepath, cmd, environ=env)
 		dims = (str(project), str(fp))
 		xid = '/'.join(dims)
 		yield ('Fates', dims, xid, None, ki)
