@@ -16,7 +16,7 @@ def _no_argv(argv):
 	if argv:
 		sys.stderr.write("WARNING: issued command does not take arguments.\n")
 
-def clean(pd:root.Product, argv=(), **ignored):
+def clean(pdr:files.Path, argv=(), **ignored):
 	"""
 	# Remove factor image files.
 	"""
@@ -24,22 +24,23 @@ def clean(pd:root.Product, argv=(), **ignored):
 	return 0
 
 # Rebuild project index from directory structure.
-def index(pd:root.Product, argv=(), **ignored):
+def index(pdr:files.Path, argv=(), **ignored):
 	"""
 	# Create or update the project index by scanning the filesystem.
 	"""
 	_no_argv(argv)
 
-	operations.update(pd)
+	operations.update(root.Product(pdr))
 	sys.stderr.write("NOTICE: updated project index using the product directory.\n")
 	return 0
 
-def connect(pd:root.Product, position=None, contexts=None, argv=()):
+def connect(pdr:files.Path, position=None, contexts=None, argv=()):
 	"""
 	# Add connections to product index.
 	"""
 
 	targets = [files.Path.from_relative(files.root, x) for x in argv]
+	pd = root.Product(pdr)
 	fp = pd.connections_index_route
 	cl = fp.fs_load().decode('utf-8').split('\n')
 
@@ -55,11 +56,12 @@ def connect(pd:root.Product, position=None, contexts=None, argv=()):
 
 	return 0
 
-def disconnect(pd:root.Product, contexts=None, argv=()):
+def disconnect(pdr:files.Path, contexts=None, argv=()):
 	"""
 	# Remove connections from product index.
 	"""
 
+	pd = root.Product(pdr)
 	fp = pd.connections_index_route
 	cl = fp.fs_load().decode('utf-8').split('\n')
 
@@ -70,7 +72,7 @@ def disconnect(pd:root.Product, contexts=None, argv=()):
 
 	return 0
 
-def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4):
+def build(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
 	from fault.time.sysclock import now
 
 	connections = []
@@ -97,7 +99,7 @@ def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4)
 
 	# Project Context
 	ctx = root.Context()
-	ctx.connect(pd.route)
+	pd = ctx.connect(pdr)
 	ctx.load()
 
 	from fault.transcript import execution
@@ -122,13 +124,13 @@ def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4)
 
 	return 0
 
-def test(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=8):
+def test(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=8):
 	from fault.transcript import terminal
 	from fault.transcript import fatetheme
 
 	# Project Context
 	ctx = root.Context()
-	ctx.connect(pd.route)
+	pd = ctx.connect(pdr)
 	ctx.load()
 
 	control = terminal.setup()
@@ -159,7 +161,7 @@ def resolve(override:str=None):
 	else:
 		return None
 
-def integrate(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4):
+def integrate(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
 	"""
 	# Complete build connecting requirements and updating indexes.
 	"""
@@ -186,11 +188,11 @@ def integrate(pd:root.Product, intention='optimal', contexts=None, argv=(), lane
 
 	# Default to index and identify; -u to suppress.
 	if update_index:
-		index(pd)
+		index(pdr)
 
 	# Project Context
 	ctx = root.Context()
-	ctx.connect(pd.route)
+	pd = ctx.connect(pdr)
 	ctx.load()
 
 	from fault.transcript import integration
@@ -293,16 +295,15 @@ def main(inv:process.Invocation) -> process.Exit:
 			cc = cc[1]
 
 	if '-D' in config:
-		pd = root.Product(files.Path.from_path(config['-D']))
+		pdr = files.Path.from_path(config['-D'])
 	else:
-		pd = root.Product(files.Path.from_absolute(pwd))
+		pdr = files.Path.from_absolute(pwd)
 
-	pd.load()
-	os.environ['PRODUCT'] = str(pd.route)
+	os.environ['PRODUCT'] = str(pdr)
 	cmd = globals()[command_id] # No such command.
 
 	try:
-		status = (cmd(pd, contexts=cc, argv=remainder))
+		status = (cmd(pdr, contexts=cc, argv=remainder))
 	except process.Exit as failure:
 		raise
 
