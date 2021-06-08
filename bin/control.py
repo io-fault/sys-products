@@ -20,7 +20,7 @@ def clean(pd:root.Product, argv=(), **ignored):
 	"""
 	# Remove factor image files.
 	"""
-	sys.stderr.write("NOTE: no effect; currently not implemented.\n")
+	sys.stderr.write("NOTICE: no effect; clean currently not implemented.\n")
 	return 0
 
 # Rebuild project index from directory structure.
@@ -31,39 +31,44 @@ def index(pd:root.Product, argv=(), **ignored):
 	_no_argv(argv)
 
 	operations.update(pd)
-	sys.stderr.write("NOTE: updated project index using the product directory.\n")
+	sys.stderr.write("NOTICE: updated project index using the product directory.\n")
 	return 0
 
-def identify(pd:root.Product, argv=(), **ignored):
-	"""
-	# Create or update the project identities.
-	"""
-	_no_argv(argv)
-	idpath = (pd.route/'IDENTITY')
-	sys.stderr.write("NOTE: no effect; currently not implemented.\n")
-	return 0
-
-def connect(pd:root.Product, targets:typing.Sequence[files.Path]=[], position=None, contexts=None, argv=()):
+def connect(pd:root.Product, position=None, contexts=None, argv=()):
 	"""
 	# Add connections to product index.
 	"""
 
-	fp = pd.route/'CONNECTIONS'
-	cl = fp.fs_load().split(b'\n')
+	targets = [files.Path.from_relative(files.root, x) for x in argv]
+	fp = pd.connections_index_route
+	cl = fp.fs_load().decode('utf-8').split('\n')
 
-	if position is not None:
+	if position is None:
 		cl.extend(map(str, targets))
 	else:
 		cl[(position-1):position] = map(str, targets)
 
-	fp.fs_store(b'\n'.join(cl))
+	# Write unique connections; first entry wins placement.
+	written = set()
+	f = (lambda x: written.add(x) or x)
+	fp.fs_store('\n'.join(f(x) for x in cl if x not in written and x.strip()).encode('utf-8'))
+
 	return 0
 
-def disconnect(pd:root.Product, targets:typing.Sequence[files.Path]=[], position=None, contexts=None, argv=()):
+def disconnect(pd:root.Product, contexts=None, argv=()):
 	"""
 	# Remove connections from product index.
 	"""
-	pass
+
+	fp = pd.connections_index_route
+	cl = fp.fs_load().decode('utf-8').split('\n')
+
+	# Write unique connections; first entry wins placement.
+	written = set(str(files.Path.from_relative(files.root, x)) for x in argv)
+	f = (lambda x: written.add(x) or x)
+	fp.fs_store('\n'.join(f(x) for x in cl if x not in written and x.strip()).encode('utf-8'))
+
+	return 0
 
 def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4):
 	from fault.time.sysclock import now
@@ -75,8 +80,10 @@ def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4)
 	for i, a in enumerate(argv):
 		if a[:2] == '-C':
 			connections.append(a[2:])
-		elif a == '-X':
+		elif a == '-u':
 			update_index = False
+		elif a == '-U':
+			update_index = True
 		elif a[:2] == '-L':
 			lanes = int(a[2:] or '4') # Requires decimals.
 		else:
@@ -84,10 +91,9 @@ def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4)
 			break
 	symbols = argv[symbol_index:]
 
-	# Default to index and identify; -X to suppress.
+	# Default to index; -u to suppress.
 	if update_index:
 		index(pd)
-		identify(pd)
 
 	# Project Context
 	ctx = root.Context()
@@ -109,7 +115,10 @@ def build(pd:root.Product, intention='optimal', contexts=None, argv=(), lanes=4)
 	build_traps = execution.Traps.construct(eox=integration.select_failures, eop=build_reporter)
 	with files.Path.fs_tmpdir() as cache:
 		cd = (cache / 'build-cache').fs_mkdir()
-		operations.build(build_traps, ctx, status, pd, contexts.fs_iterfiles(type='directory'), intention, cd, symbols)
+		operations.build(build_traps, ctx, status, pd,
+			contexts.fs_iterfiles(type='directory'), intention, cd,
+			argv=symbols
+		)
 
 	return 0
 
@@ -164,8 +173,10 @@ def integrate(pd:root.Product, intention='optimal', contexts=None, argv=(), lane
 	for i, a in enumerate(argv):
 		if a[:2] == '-C':
 			connections.append(a[2:])
-		elif a == '-X':
+		elif a == '-u':
 			update_index = False
+		elif a == '-U':
+			update_index = True
 		elif a[:2] == '-L':
 			lanes = int(a[2:] or '4') # Requires decimals.
 		else:
@@ -173,10 +184,9 @@ def integrate(pd:root.Product, intention='optimal', contexts=None, argv=(), lane
 			break
 	symbols = argv[symbol_index:]
 
-	# Default to index and identify; -X to suppress.
+	# Default to index and identify; -u to suppress.
 	if update_index:
 		index(pd)
-		identify(pd)
 
 	# Project Context
 	ctx = root.Context()
