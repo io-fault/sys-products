@@ -95,7 +95,7 @@ def build(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
 
 	# Default to index; -u to suppress.
 	if update_index:
-		index(pd)
+		index(pdr)
 
 	# Project Context
 	ctx = root.Context()
