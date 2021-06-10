@@ -252,7 +252,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	for i, a in enumerate(inv.argv):
 		if a[:1] == '-':
 			continue
-		elif inv.argv[i-1] in {'-D', '-X'}:
+		elif inv.argv[i-1] in {'-D', '-x'}:
 			continue
 
 		# End of options.
@@ -287,7 +287,8 @@ def main(inv:process.Invocation) -> process.Exit:
 
 	cc = None
 	if command_id in context_commands:
-		cc = resolve(config.get('-X') or None)
+		# Command expects construction context.
+		cc = resolve(config.get('-x') or None)
 		if cc is None:
 			sys.stderr.write("ERROR: no context set available\n")
 			return inv.exit(10)
