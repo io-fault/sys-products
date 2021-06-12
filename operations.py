@@ -7,20 +7,20 @@ import typing
 
 from fault.context import tools
 from fault.system import files
-from fault.project import root
 
 from fault.transcript import execution
 from fault.system.execution import KInvocation
 from fault.project import graph
+from fault.project import system as lsf
 
 from ..root import query
 
-def update(pd:root.Product):
+def update(pd:lsf.Product):
 	pd.clear()
 	pd.update()
 	pd.store()
 
-def plan_build(command, ccontext:files.Path, intention:str, cache:files.Path, argv, pcontext:root.Context, identifier):
+def plan_build(command, ccontext:files.Path, intention:str, cache:files.Path, argv, pcontext:lsf.Context, identifier):
 	"""
 	# Create an invocation for processing &pj with &ccontext.
 	"""
@@ -37,7 +37,7 @@ def plan_build(command, ccontext:files.Path, intention:str, cache:files.Path, ar
 	] + argv)
 	yield ('FPI', dims, xid, None, ki)
 
-def plan_test(intention:str, argv, pcontext:root.Context, identifier):
+def plan_test(intention:str, argv, pcontext:lsf.Context, identifier):
 	"""
 	# Create an invocation for processing the project from &pcontext selected using &identifier.
 	"""
@@ -45,10 +45,9 @@ def plan_test(intention:str, argv, pcontext:root.Context, identifier):
 	pj = pcontext.project(identifier)
 	project = pj.factor
 
-	from ..root import query
 	exeenv, exepath, xargs = query.dispatch('python')
 
-	for (fp, ft), fd in pj.select(root.types.factor@'test'):
+	for (fp, ft), fd in pj.select(lsf.types.factor@'test'):
 		if not fp.identifier.startswith('test_'):
 			continue
 
@@ -63,8 +62,8 @@ def plan_test(intention:str, argv, pcontext:root.Context, identifier):
 		yield ('Fates', dims, xid, None, ki)
 
 # Render FPI references.
-def iterconstructs(pd:root.Product, contexts:typing.Iterable[files.Path], intention:str, cache:files.Path, argv=None):
-	ctx = root.Context()
+def iterconstructs(pd:lsf.Product, contexts:typing.Iterable[files.Path], intention:str, cache:files.Path, argv=None):
+	ctx = lsf.Context()
 	ctx.connect(pd.route)
 	ctx.load()
 
@@ -78,7 +77,7 @@ def iterconstructs(pd:root.Product, contexts:typing.Iterable[files.Path], intent
 			q.finish(pj.identifier)
 
 # Build the product or a project set.
-def build(traps, ctx, status, pd:root.Product,
+def build(traps, ctx, status, pd:lsf.Product,
 	contexts:typing.Iterable[files.Path], intention:str,
 	cache:files.Path, argv=None, rebuild=False):
 	"""
@@ -111,7 +110,7 @@ def build(traps, ctx, status, pd:root.Product,
 
 		sys.stdout.write("[<- %s (integrate/build)]\n" %(summary.synopsis(),))
 
-def test(traps, ctx, status, pd:root.Product, intention:str, argv=None):
+def test(traps, ctx, status, pd:lsf.Product, intention:str, argv=None):
 	"""
 	# Test all projects.
 	"""

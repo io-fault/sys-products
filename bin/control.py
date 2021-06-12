@@ -7,8 +7,8 @@ import typing
 
 from fault.system import files
 from fault.system import process
-from fault.project import root
 from fault.context import tools
+from fault.project import system as lsf
 
 from .. import operations
 
@@ -30,7 +30,7 @@ def index(pdr:files.Path, argv=(), **ignored):
 	"""
 	_no_argv(argv)
 
-	operations.update(root.Product(pdr))
+	operations.update(lsf.Product(pdr))
 	sys.stderr.write("NOTICE: updated project index using the product directory.\n")
 	return 0
 
@@ -40,7 +40,7 @@ def connect(pdr:files.Path, position=None, contexts=None, argv=()):
 	"""
 
 	targets = [files.Path.from_relative(files.root, x) for x in argv]
-	pd = root.Product(pdr)
+	pd = lsf.Product(pdr)
 	fp = pd.connections_index_route
 	cl = fp.fs_load().decode('utf-8').split('\n')
 
@@ -61,7 +61,7 @@ def disconnect(pdr:files.Path, contexts=None, argv=()):
 	# Remove connections from product index.
 	"""
 
-	pd = root.Product(pdr)
+	pd = lsf.Product(pdr)
 	fp = pd.connections_index_route
 	cl = fp.fs_load().decode('utf-8').split('\n')
 
@@ -98,7 +98,7 @@ def build(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
 		index(pdr)
 
 	# Project Context
-	ctx = root.Context()
+	ctx = lsf.Context()
 	pd = ctx.connect(pdr)
 	ctx.load()
 
@@ -129,7 +129,7 @@ def test(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=8):
 	from fault.transcript import fatetheme
 
 	# Project Context
-	ctx = root.Context()
+	ctx = lsf.Context()
 	pd = ctx.connect(pdr)
 	ctx.load()
 
@@ -140,7 +140,7 @@ def test(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=8):
 	operations.test(ctx, status, pd, intention)
 	return 0
 
-def unspecified(pd:root.Product, contexts=None, argv=()):
+def unspecified(pd:lsf.Product, contexts=None, argv=()):
 	return 254
 
 # Commands expecting a construction context set.
@@ -191,7 +191,7 @@ def integrate(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes
 		index(pdr)
 
 	# Project Context
-	ctx = root.Context()
+	ctx = lsf.Context()
 	pd = ctx.connect(pdr)
 	ctx.load()
 
