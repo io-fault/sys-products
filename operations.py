@@ -20,7 +20,10 @@ def update(pd:lsf.Product):
 	pd.update()
 	pd.store()
 
-def plan_build(command, ccontext:files.Path, intention:str, cache:files.Path, argv, pcontext:lsf.Context, identifier):
+def plan_build(command,
+		ccontext:files.Path, intentions:typing.Sequence[str],
+		cache:files.Path, argv, pcontext:lsf.Context, identifier
+	):
 	"""
 	# Create an invocation for processing &pj with &ccontext.
 	"""
@@ -33,8 +36,12 @@ def plan_build(command, ccontext:files.Path, intention:str, cache:files.Path, ar
 	xid = '/'.join(dims)
 
 	ki = KInvocation(xargs[0], xargs + [
-		str(ccontext), str(cache), str(pj.product.route), str(project)
+		str(ccontext),
+		'transient', str(cache),
+		':'.join(intentions),
+		str(pj.product.route), str(project)
 	] + argv)
+
 	yield ('FPI', dims, xid, None, ki)
 
 def plan_test(intention:str, argv, pcontext:lsf.Context, identifier):
@@ -95,7 +102,7 @@ def build(traps, ctx, status, pd:lsf.Product,
 			try:
 				q = graph.Queue()
 				q.extend(ctx)
-				local_plan = tools.partial(plan_build, 'integrate', ccontext, intention, cache, argv, ctx)
+				local_plan = tools.partial(plan_build, 'integrate', ccontext, [intention], cache, argv, ctx)
 				execution.dispatch(traps, local_plan, control, monitors, summary, "FPI", constants, q)
 			finally:
 				summary.set_field_read_type('usage', 'overall')
