@@ -52,16 +52,15 @@ def plan_test(intention:str, argv, pcontext:lsf.Context, identifier):
 	pj = pcontext.project(identifier)
 	project = pj.factor
 
-	exeenv, exepath, xargs = query.dispatch('python')
+	exeenv, exepath, xargs = query.dispatch('test-python-module')
 
 	for (fp, ft), fd in pj.select(lsf.types.factor@'test'):
 		if not fp.identifier.startswith('test_'):
 			continue
 
-		cmd = xargs + ['fault.test.bin.coherence', str(project), str(fp)]
+		cmd = xargs + [str(project), str(fp)]
 		env = dict(os.environ)
 		env.update(exeenv)
-		env['PRODUCT'] = str(pj.product.route)
 		env['PROJECT'] = str(project)
 		ki = KInvocation(str(exepath), cmd, environ=env)
 		dims = (str(project), str(fp))
