@@ -216,7 +216,11 @@ def integrate(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes
 		with files.Path.fs_tmpdir() as cache:
 			if 1:
 				cd = (cache / 'build-cache').fs_mkdir()
-				operations.build(build_traps, ctx, status, pd, contexts.fs_iterfiles(type='directory'), intention, cd, symbols)
+				operations.build(
+					build_traps, ctx, status, pd,
+					contexts.fs_iterfiles(type='directory'),
+					intention, cd, symbols
+				)
 				build_usage = summary.metrics.total('usage')
 
 		control.clear()
