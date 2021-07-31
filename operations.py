@@ -36,8 +36,7 @@ def plan_build(command,
 	xid = '/'.join(dims)
 
 	ki = KInvocation(xargs[0], xargs + [
-		str(ccontext),
-		'transient', str(cache),
+		str(ccontext), 'transient', str(cache),
 		':'.join(intentions),
 		str(pj.product.route), str(project)
 	] + argv)
@@ -101,7 +100,11 @@ def build(traps, ctx, status, pd:lsf.Product,
 			try:
 				q = graph.Queue()
 				q.extend(ctx)
-				local_plan = tools.partial(plan_build, 'integrate', ccontext, [intention], cache, argv, ctx)
+				local_plan = tools.partial(
+					plan_build, 'integrate',
+					ccontext, [intention],
+					cache, argv, ctx
+				)
 				execution.dispatch(traps, local_plan, control, monitors, summary, "FPI", constants, q)
 			finally:
 				summary.set_field_read_type('usage', 'overall')

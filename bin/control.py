@@ -118,7 +118,7 @@ def build(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
 	with files.Path.fs_tmpdir() as cache:
 		cd = (cache / 'build-cache').fs_mkdir()
 		operations.build(build_traps, ctx, status, pd,
-			contexts.fs_iterfiles(type='directory'), intention, cd,
+			[contexts], intention, cd,
 			argv=symbols
 		)
 
@@ -218,7 +218,7 @@ def integrate(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes
 				cd = (cache / 'build-cache').fs_mkdir()
 				operations.build(
 					build_traps, ctx, status, pd,
-					contexts.fs_iterfiles(type='directory'),
+					[contexts],
 					intention, cd, symbols
 				)
 				build_usage = summary.metrics.total('usage')
@@ -246,8 +246,6 @@ def integrate(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes
 	return 0
 
 def main(inv:process.Invocation) -> process.Exit:
-	os.environ['FPI_CACHE'] = 'transient'
-
 	try:
 		pwd = os.environ['PWD']
 	except KeyError:
