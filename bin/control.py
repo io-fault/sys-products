@@ -296,6 +296,7 @@ def main(inv:process.Invocation) -> process.Exit:
 			return inv.exit(10)
 		else:
 			cc = cc[1]
+	os.environ['F_PRODUCT'] = str(cc)
 
 	if '-D' in config:
 		pdr = files.Path.from_path(config['-D'])
