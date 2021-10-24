@@ -1,16 +1,17 @@
 """
-# Construction Context resolution for &..products.
+# Construction Context resolution support.
 """
 import os
-import typing
+from collections.abc import Iterator
 
 from fault.system import files
 
 def select(local:str=None,
-		environment='CONTEXTSET',
-		fault='FAULT',
-		home='HOME', user='.cc'
-	) -> typing.Tuple[str, files.Path]:
+		environment:str='FCC',
+		platform:str='PLATFORM',
+		home:str='HOME',
+		user:str='.cc'
+	) -> Iterator[tuple[str, files.Path]]:
 	"""
 	# Generate the possible locations of a usable context set.
 	# Usually, the first existing path should be used.
@@ -33,5 +34,18 @@ def select(local:str=None,
 
 	yield ('user', files.Path.from_absolute(os.environ[home]) / user) # No HOME?
 
-	if os.environ.get(fault, None):
-		yield ('fault', files.Path.from_absolute(os.environ[fault]) / 'cc')
+	if os.environ.get(platform, None):
+		yield ('platform', files.Path.from_absolute(os.environ[platform]) / 'cc')
+
+def resolve(override:str=None) -> tuple[str, files.Path]:
+	"""
+	# Use &select to find the highest priority construction context whose directory
+	# exists on the filesystem. The identified path is not verified to conform
+	# to a protocol so subsequent checks may be required.
+	"""
+
+	for pair in select(local=override):
+		if pair[1].fs_type() == 'directory':
+			return pair
+	else:
+		return ('unavailable', None)

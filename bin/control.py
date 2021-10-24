@@ -1,249 +1,91 @@
 """
-# Product build and configuration system command interface.
+# Product configuration and integration system command.
 """
 import sys
 import os
-import typing
+import importlib
 
+from fault.vector import recognition
 from fault.system import files
 from fault.system import process
-from fault.context import tools
-from fault.project import system as lsf
 
-from .. import operations
+from .. import __name__ as project_package_name
+from .. import context
 
-def _no_argv(argv):
-	if argv:
-		sys.stderr.write("WARNING: issued command does not take arguments.\n")
-
-def clean(pdr:files.Path, argv=(), **ignored):
-	"""
-	# Remove factor image files.
-	"""
-	sys.stderr.write("NOTICE: no effect; clean currently not implemented.\n")
-	return 0
-
-# Rebuild project index from directory structure.
-def index(pdr:files.Path, argv=(), **ignored):
-	"""
-	# Create or update the project index by scanning the filesystem.
-	"""
-	_no_argv(argv)
-
-	operations.update(lsf.Product(pdr))
-	sys.stderr.write("NOTICE: updated project index using the product directory.\n")
-	return 0
-
-def connect(pdr:files.Path, position=None, contexts=None, argv=()):
-	"""
-	# Add connections to product index.
-	"""
-
-	targets = [files.Path.from_relative(files.root, x) for x in argv]
-	pd = lsf.Product(pdr)
-	fp = pd.connections_index_route
-	cl = fp.fs_load().decode('utf-8').split('\n')
-
-	if position is None:
-		cl.extend(map(str, targets))
-	else:
-		cl[(position-1):position] = map(str, targets)
-
-	# Write unique connections; first entry wins placement.
-	written = set()
-	f = (lambda x: written.add(x) or x)
-	fp.fs_store('\n'.join(f(x) for x in cl if x not in written and x.strip()).encode('utf-8'))
-
-	return 0
-
-def disconnect(pdr:files.Path, contexts=None, argv=()):
-	"""
-	# Remove connections from product index.
-	"""
-
-	pd = lsf.Product(pdr)
-	fp = pd.connections_index_route
-	cl = fp.fs_load().decode('utf-8').split('\n')
-
-	# Write unique connections; first entry wins placement.
-	written = set(str(files.Path.from_relative(files.root, x)) for x in argv)
-	f = (lambda x: written.add(x) or x)
-	fp.fs_store('\n'.join(f(x) for x in cl if x not in written and x.strip()).encode('utf-8'))
-
-	return 0
-
-def build(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
-	from fault.time.sysclock import now
-
-	connections = []
-	symbol_index = 0
-	update_index = True
-
-	for i, a in enumerate(argv):
-		if a[:2] == '-C':
-			connections.append(a[2:])
-		elif a == '-u':
-			update_index = False
-		elif a == '-U':
-			update_index = True
-		elif a[:2] == '-L':
-			lanes = int(a[2:] or '4') # Requires decimals.
-		else:
-			symbol_index = i
-			break
-	symbols = argv[symbol_index:]
-
-	# Default to index; -u to suppress.
-	if update_index:
-		index(pdr)
-
-	# Project Context
-	ctx = lsf.Context()
-	pd = ctx.connect(pdr)
-	ctx.load()
-
-	from fault.transcript import execution
-	from fault.transcript import terminal
-	from fault.transcript import fatetheme, proctheme
-	from fault.transcript import integration
-
-	# Allocate and configure control and monitors.
-	control = terminal.setup()
-	control.configure(lanes+1)
-	monitors, summary = terminal.aggregate(control, proctheme, lanes, width=160)
-
-	status = (control, monitors, summary)
-	build_reporter = integration.emitter(integration.factor_report, sys.stdout.write)
-	build_traps = execution.Traps.construct(eox=integration.select_failures, eop=build_reporter)
-	with files.Path.fs_tmpdir() as cache:
-		cd = (cache / 'build-cache').fs_mkdir()
-		operations.build(build_traps, ctx, status, pd,
-			[contexts], intention, cd,
-			argv=symbols
-		)
-
-	return 0
-
-def test(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=8):
-	from fault.transcript import terminal
-	from fault.transcript import fatetheme
-
-	# Project Context
-	ctx = lsf.Context()
-	pd = ctx.connect(pdr)
-	ctx.load()
-
-	control = terminal.setup()
-	control.configure(lanes+1)
-	monitors, summary = terminal.aggregate(control, fatetheme, lanes, width=160)
-	status = (control, monitors, summary)
-	operations.test(ctx, status, pd, intention)
-	return 0
-
-def unspecified(pd:lsf.Product, contexts=None, argv=()):
-	return 254
-
-# Commands expecting a construction context set.
-context_commands = {
-	'integrate',
-	'build',
-	'test',
-	'continue',
-	'unspecified',
+restricted = {
+	'-c': ('field-replace', ".build-cache", 'persistent-cache'),
 }
 
-def resolve(override:str=None):
-	from ..context import select
+required = {
+	'-x': ('field-replace', 'construction-context'),
+	'-X': ('field-replace', 'cc-executable'),
 
-	for pair in select(local=override):
-		if pair[1].fs_type() == 'directory':
-			return pair
-	else:
-		return None
+	'-D': ('field-replace', 'product-directory'),
+	'-L': ('field-replace', 'processing-lanes'),
+	'-C': ('field-replace', 'persistent-cache'),
+}
 
-def integrate(pdr:files.Path, intention='optimal', contexts=None, argv=(), lanes=4):
+command_index = {
+	# Process factors with respect to the product index.
+	'integrate': (
+		'.process', 'integrate', {
+			# Defaults to update when missing.
+			'-u': ('field-replace', 'never', 'update-product-index'),
+			'-U': ('field-replace', 'always', 'update-product-index'),
+
+			# Integration operation controls. Disable testing/processing.
+			'-t': ('field-replace', True, 'disable-functionality-tests'),
+			'-T': ('field-replace', False, 'disable-functionality-tests'),
+			'-b': ('field-replace', True, 'disable-factor-processing'),
+			'-B': ('field-replace', False, 'disable-factor-processing'),
+		},
+		{},
+	),
+
+	# Manipulate product index and connections.
+	'delta': (
+		'.manipulate', 'delta', {
+			# Defaults to never update.
+			'-u': ('field-replace', 'missing', 'update-product-index'),
+			'-U': ('field-replace', 'always', 'update-product-index'),
+			'--void': ('field-replace', True, 'remove-product-index'),
+		}, {
+			'-i': ('sequence-append', 'interpreted-connections'),
+			'-x': ('sequence-append', 'interpreted-disconnections'),
+			'-I': ('sequence-append', 'direct-connections'),
+			'-X': ('sequence-append', 'direct-disconnections'),
+		},
+	),
+
+	# Show product status.
+	'status': (
+		'.query', 'report',
+		{}, {},
+	)
+}
+
+def configure(restricted, required, argv):
 	"""
-	# Complete build connecting requirements and updating indexes.
+	# Root option parser.
 	"""
-	from fault.time.sysclock import now, elapsed
-	os.environ['FRAMECHANNEL'] = 'integrate'
+	config = {
+		'intentions': set(),
+		'processing-lanes': '4',
+		'construction-context': None,
+		'persistent-cache': None,
+		'product-directory': None,
+		'default-product': None,
 
-	connections = []
-	symbol_index = 0
-	update_index = True
+		'interpreted-connections': [],
+		'interpreted-disconnections': [],
+		'direct-connections': [],
+		'direct-disconnections': [],
+	}
 
-	for i, a in enumerate(argv):
-		if a[:2] == '-C':
-			connections.append(a[2:])
-		elif a == '-u':
-			update_index = False
-		elif a == '-U':
-			update_index = True
-		elif a[:2] == '-L':
-			lanes = int(a[2:] or '4') # Requires decimals.
-		else:
-			symbol_index = i
-			break
-	symbols = argv[symbol_index:]
+	oeg = recognition.legacy(restricted, required, argv)
+	remainder = recognition.merge(config, oeg)
 
-	# Default to index and identify; -u to suppress.
-	if update_index:
-		index(pdr)
-
-	# Project Context
-	ctx = lsf.Context()
-	pd = ctx.connect(pdr)
-	ctx.load()
-
-	from fault.transcript import integration
-	from fault.transcript import execution
-	from fault.transcript import terminal
-	from fault.transcript import fatetheme, proctheme
-
-	# Allocate and configure control and monitors.
-	control = terminal.setup()
-	control.configure(lanes+1)
-	monitors, summary = terminal.aggregate(control, proctheme, lanes, width=160)
-
-	start_time = elapsed()
-	test_usage = build_usage = 0
-
-	sys.stdout.write("[-> Product Integration %r %s (integrate)]\n" %(str(pd.route), now().select('iso'),))
-	try:
-		build_reporter = integration.emitter(integration.factor_report, sys.stdout.write)
-		build_traps = execution.Traps.construct(eox=integration.select_failures, eop=build_reporter)
-		status = (control, monitors, summary)
-		with files.Path.fs_tmpdir() as cache:
-			if 1:
-				cd = (cache / 'build-cache').fs_mkdir()
-				operations.build(
-					build_traps, ctx, status, pd,
-					[contexts],
-					intention, cd, symbols
-				)
-				build_usage = summary.metrics.total('usage')
-
-		control.clear()
-
-		monitors, summary = terminal.aggregate(control, fatetheme, lanes, width=160)
-		status = (control, monitors, summary)
-		if 1:
-			test_reporter = integration.emitter(integration.test_report, sys.stdout.write)
-			test_traps = execution.Traps.construct(eop=test_reporter)
-			operations.test(test_traps, ctx, status, pd, intention)
-			test_usage = summary.metrics.total('usage')
-	finally:
-		duration = elapsed().decrease(start_time)
-		summary.title("Integration")
-		summary.set_field_read_type('usage', 'overall')
-		metrics = summary.metrics
-		metrics.clear()
-		metrics.update('usage', build_usage, 1)
-		metrics.update('usage', test_usage, 1)
-		metrics.commit(duration.select('millisecond') / 1000)
-		sys.stdout.write("[<- %s %s (integrate)]\n" %(summary.synopsis(), now().select('iso'),))
-
-	return 0
+	return config, remainder
 
 def main(inv:process.Invocation) -> process.Exit:
 	try:
@@ -251,64 +93,36 @@ def main(inv:process.Invocation) -> process.Exit:
 	except KeyError:
 		pwd = str(file.Path.from_cwd())
 
-	for i, a in enumerate(inv.argv):
-		if a[:1] == '-':
-			continue
-		elif inv.argv[i-1] in {'-D', '-x'}:
-			continue
+	config, remainder = configure(restricted, required, inv.argv)
+	if not remainder:
+		command_id = 'status'
 
-		# End of options.
-		command_index = i
-		command_id = inv.argv[command_index] # update, connect, build
-		break
+	if remainder:
+		command_id = remainder[0]
 	else:
-		# No command.
-		command_id = 'unspecified'
-		command_index = len(inv.argv)
+		command_id = 'help'
 
-	options = inv.argv[:command_index]
-	remainder = inv.argv[command_index+1:]
+	if command_id == 'help':
+		sys.stderr.write("pdctl [-D product-directory] (integrate | status | delta) [system-symbols]\n")
+		return inv.exit(63)
+	elif command_id not in command_index:
+		sys.stderr.write("ERROR: unknown command '%s'." %(command_id,))
+		return inv.exit(2)
 
-	config = {}
-	key = None
-	for opt in options:
-		if opt[:1] == '-':
-			if key is not None:
-				if key in config:
-					config[key] += 1
-				else:
-					config[key] = 1
+	module_name, operation, oprestricted, oprequired = command_index[command_id]
+	cmd_oeg = recognition.legacy(oprestricted, oprequired, remainder[1:])
+	cmd_remainder = recognition.merge(config, cmd_oeg)
 
-			if len(opt) == 2:
-				key = opt
-			else:
-				config[opt[:2]] = opt[2:]
-		else:
-			config[key] = opt
-			key = None
+	origin, cc = context.resolve(config['construction-context'])
 
-	cc = None
-	if command_id in context_commands:
-		# Command expects construction context.
-		cc = resolve(config.get('-x') or None)
-		if cc is None:
-			sys.stderr.write("ERROR: no context set available\n")
-			return inv.exit(10)
-		else:
-			cc = cc[1]
-	os.environ['F_PRODUCT'] = str(cc)
-
-	if '-D' in config:
-		pdr = files.Path.from_path(config['-D'])
+	if config['product-directory']:
+		pdr = files.Path.from_path(config['product-directory'])
+		config['default-product'] = False
 	else:
 		pdr = files.Path.from_absolute(pwd)
+		config['default-product'] = True
 
-	os.environ['PRODUCT'] = str(pdr)
-	cmd = globals()[command_id] # No such command.
-
-	try:
-		status = (cmd(pdr, contexts=cc, argv=remainder))
-	except process.Exit as failure:
-		raise
-
-	return inv.exit(status)
+	module = importlib.import_module(module_name, project_package_name)
+	pd_oper = getattr(module, operation)
+	pd_oper(sys.stdout.write, config, cc, pdr, cmd_remainder)
+	return inv.exit(0)
