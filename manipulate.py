@@ -39,7 +39,11 @@ def connecting(config):
 
 def reconnect(pd:lsf.Product, insertions, deletions):
 	fp = pd.connections_index_route
-	cl = fp.fs_load().decode('utf-8').split('\n')
+	cl = []
+	try:
+		cl.extend(fp.fs_load().decode('utf-8').split('\n'))
+	except FileNotFoundError:
+		pass
 
 	cl.extend(insertions)
 	written = set(deletions)
