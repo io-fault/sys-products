@@ -27,41 +27,13 @@ required = {
 
 command_index = {
 	# Process factors with respect to the product index.
-	'integrate': (
-		'.process', 'integrate', {
-			# Defaults to update when missing.
-			'-u': ('field-replace', 'never', 'update-product-index'),
-			'-U': ('field-replace', 'always', 'update-product-index'),
-
-			# Integration operation controls. Disable testing/processing.
-			'-t': ('field-replace', True, 'disable-functionality-tests'),
-			'-T': ('field-replace', False, 'disable-functionality-tests'),
-			'-b': ('field-replace', True, 'disable-factor-processing'),
-			'-B': ('field-replace', False, 'disable-factor-processing'),
-		},
-		{},
-	),
+	'integrate': ('.process', 'options', 'integrate'),
 
 	# Manipulate product index and connections.
-	'delta': (
-		'.manipulate', 'delta', {
-			# Defaults to never update.
-			'-u': ('field-replace', 'missing', 'update-product-index'),
-			'-U': ('field-replace', 'always', 'update-product-index'),
-			'--void': ('field-replace', True, 'remove-product-index'),
-		}, {
-			'-i': ('sequence-append', 'interpreted-connections'),
-			'-x': ('sequence-append', 'interpreted-disconnections'),
-			'-I': ('sequence-append', 'direct-connections'),
-			'-X': ('sequence-append', 'direct-disconnections'),
-		},
-	),
+	'delta': ('.manipulate', 'options', 'delta'),
 
 	# Show product status.
-	'status': (
-		'.query', 'report',
-		{}, {},
-	)
+	'status': ('.query', 'options', 'report')
 }
 
 def configure(restricted, required, argv):
@@ -109,7 +81,10 @@ def main(inv:process.Invocation) -> process.Exit:
 		sys.stderr.write("ERROR: unknown command '%s'." %(command_id,))
 		return inv.exit(2)
 
-	module_name, operation, oprestricted, oprequired = command_index[command_id]
+	module_name, optset, operation = command_index[command_id]
+	module = importlib.import_module(module_name, project_package_name)
+	oprestricted, oprequired = getattr(module, optset)
+
 	cmd_oeg = recognition.legacy(oprestricted, oprequired, remainder[1:])
 	cmd_remainder = recognition.merge(config, cmd_oeg)
 
@@ -122,7 +97,6 @@ def main(inv:process.Invocation) -> process.Exit:
 		pdr = files.Path.from_absolute(pwd)
 		config['default-product'] = True
 
-	module = importlib.import_module(module_name, project_package_name)
 	pd_oper = getattr(module, operation)
 	pd_oper(sys.stdout.write, config, cc, pdr, cmd_remainder)
 	return inv.exit(0)

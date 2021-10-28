@@ -12,6 +12,8 @@ import collections
 from fault.project import system as lsf
 from fault.system import files
 
+options = ({}, {})
+
 def sources(factor_record):
 	(fpath, ftype), (syms, src) = factor_record
 	for x in src:

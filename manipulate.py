@@ -6,6 +6,21 @@
 from fault.project import system as lsf
 from fault.system import files
 
+options = (
+	{
+		# Defaults to never update.
+		'-u': ('field-replace', 'missing', 'update-product-index'),
+		'-U': ('field-replace', 'always', 'update-product-index'),
+		'--void': ('field-replace', True, 'remove-product-index'),
+	},
+	{
+		'-i': ('sequence-append', 'interpreted-connections'),
+		'-x': ('sequence-append', 'interpreted-disconnections'),
+		'-I': ('sequence-append', 'direct-connections'),
+		'-X': ('sequence-append', 'direct-disconnections'),
+	}
+)
+
 def index(pd:lsf.Product, statement):
 	"""
 	# Update the index according the requested &statement.

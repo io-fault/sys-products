@@ -20,6 +20,21 @@ from fault.project import system as lsf
 
 from ..root import query
 
+options = (
+	{
+		# Defaults to update when missing.
+		'-u': ('field-replace', 'never', 'update-product-index'),
+		'-U': ('field-replace', 'always', 'update-product-index'),
+
+		# Integration operation controls. Disable testing/processing.
+		'-t': ('field-replace', True, 'disable-functionality-tests'),
+		'-T': ('field-replace', False, 'disable-functionality-tests'),
+		'-b': ('field-replace', True, 'disable-factor-processing'),
+		'-B': ('field-replace', False, 'disable-factor-processing'),
+	},
+	{}
+)
+
 def plan_build(command,
 		ccontext:files.Path,
 		intentions:Sequence[str],
