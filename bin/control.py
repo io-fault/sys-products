@@ -17,8 +17,8 @@ restricted = {
 }
 
 required = {
-	'-x': ('field-replace', 'construction-context'),
-	'-X': ('field-replace', 'cc-executable'),
+	'-x': ('field-replace', 'execution-platform'),
+	'-X': ('field-replace', 'construction-context'),
 
 	'-D': ('field-replace', 'product-directory'),
 	'-L': ('field-replace', 'processing-lanes'),
@@ -43,6 +43,7 @@ def configure(restricted, required, argv):
 	config = {
 		'intentions': set(),
 		'processing-lanes': '4',
+		'execution-platform': None,
 		'construction-context': None,
 		'persistent-cache': None,
 		'product-directory': None,
@@ -75,7 +76,13 @@ def main(inv:process.Invocation) -> process.Exit:
 		command_id = 'help'
 
 	if command_id == 'help':
-		sys.stderr.write("pdctl [-D product-directory] (integrate | status | delta) [system-symbols]\n")
+		sys.stderr.write(' '.join((
+			"pdctl",
+			"[-x platform-directory][-D product-directory]",
+			"(status | delta | integrate)",
+			"project-selector",
+			"[system-symbols]\n"
+		)))
 		return inv.exit(63)
 	elif command_id not in command_index:
 		sys.stderr.write("ERROR: unknown command '%s'." %(command_id,))
@@ -88,6 +95,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	cmd_oeg = recognition.legacy(oprestricted, oprequired, remainder[1:])
 	cmd_remainder = recognition.merge(config, cmd_oeg)
 
+	fx = config['execution-platform']
 	origin, cc = context.resolve(config['construction-context'])
 
 	if config['product-directory']:
@@ -98,5 +106,5 @@ def main(inv:process.Invocation) -> process.Exit:
 		config['default-product'] = True
 
 	pd_oper = getattr(module, operation)
-	pd_oper(sys.stdout.write, config, cc, pdr, cmd_remainder)
+	pd_oper(sys.stdout.write, config, fx, cc, pdr, cmd_remainder)
 	return inv.exit(0)

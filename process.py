@@ -170,12 +170,13 @@ def test(log, traps, ctx, status, pd:lsf.Product, argv, intention:str):
 		summary.set_field_read_type('usage', 'overall')
 		log("[<- %s (integrate/test)]\n" %(summary.synopsis(),))
 
-def integrate(log, config, cc, pdr:files.Path, argv, intention='optimal'):
+def integrate(log, config, fx, cc, pdr:files.Path, argv, intention='optimal'):
 	"""
 	# Complete build connecting requirements and updating indexes.
 	"""
 	os.environ['PRODUCT'] = str(pdr)
 	os.environ['F_PRODUCT'] = str(cc)
+	os.environ['F_EXECUTION'] = str(fx)
 	os.environ['FRAMECHANNEL'] = 'integrate'
 
 	built = tested = False

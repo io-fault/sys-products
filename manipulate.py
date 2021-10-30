@@ -67,7 +67,7 @@ def reconnect(pd:lsf.Product, insertions, deletions):
 	fp.fs_store('\n'.join(f(x) for x in cl if x not in written and x.strip()).encode('utf-8'))
 
 # Rebuild project index from directory structure.
-def delta(log, config, cc, pdr:files.Path, remainder):
+def delta(log, config, fx, cc, pdr:files.Path, remainder):
 	"""
 	# Create or update the project index by scanning the filesystem.
 	"""
