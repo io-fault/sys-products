@@ -61,10 +61,7 @@ def configure(restricted, required, argv):
 	return config, remainder
 
 def main(inv:process.Invocation) -> process.Exit:
-	try:
-		pwd = os.environ['PWD']
-	except KeyError:
-		pwd = str(file.Path.from_cwd())
+	pwd = process.fs_pwd()
 
 	config, remainder = configure(restricted, required, inv.argv)
 	if not remainder:
