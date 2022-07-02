@@ -1,5 +1,5 @@
 """
-# Product builds and tests for the local system.
+# Product builds and tests for system integration.
 """
 import os
 from collections.abc import Iterable, Sequence
@@ -9,7 +9,6 @@ from fault.system import files
 
 from fault.time.sysclock import now, elapsed
 
-from fault.transcript import integration
 from fault.transcript import terminal
 from fault.transcript import fatetheme, proctheme
 from fault.transcript import execution
@@ -54,22 +53,20 @@ def plan_build(command,
 	if executable is not None:
 		env = dict()
 		exepath = executable
-		xargs = [executable]
+		xargv = [executable]
 	else:
-		env, exepath, xargs = query.dispatch('factors-cc')
+		env, exepath, xargv = query.dispatch('factors-cc')
 
-	dims = (str(project),)
-	xid = '/'.join(dims)
-
-	ki = KInvocation(xargs[0], xargs + [
+	pj_fp = str(project)
+	ki = KInvocation(xargv[0], xargv + [
 		str(ccontext), cache_type, str(cache),
 		':'.join(intentions),
 		str(pj.product.route),
-		str(project)
+		pj_fp,
 	] + argv)
 
 	# Factor Processing Instructions
-	yield ('FPI', dims, xid, None, ki)
+	yield (pj_fp, (), pj_fp, ki)
 
 def plan_test(intention:str, argv, pcontext:lsf.Context, identifier):
 	"""
@@ -79,79 +76,66 @@ def plan_test(intention:str, argv, pcontext:lsf.Context, identifier):
 	pj = pcontext.project(identifier)
 	project = pj.factor
 
-	exeenv, exepath, xargs = query.dispatch('test-python-module')
+	exeenv, exepath, xargv = query.dispatch('python')
+	xargv.append('-d')
 
 	for (fp, ft), fd in pj.select(lsf.types.factor@'test'):
 		if not fp.identifier.startswith('test_'):
 			continue
 
-		cmd = xargs + [str(project), str(fp)]
+		pj_fp = str(project)
+		fpath = str(fp)
+		cmd = xargv + [
+			'fault.test.bin.coherence',
+			pj_fp, fpath
+		]
 		env = dict(os.environ)
 		env.update(exeenv)
-		env['PROJECT'] = str(project)
+		env['F_PROJECT'] = str(project)
 		ki = KInvocation(str(exepath), cmd, environ=env)
-		dims = (str(project), str(fp))
-		xid = '/'.join(dims)
 
 		# Test Fates
-		yield ('Fates', dims, xid, None, ki)
+		yield (pj_fp, (str(fp),), '/'.join((pj_fp, str(fp))), ki)
 
-# Render FPI references.
-def iterconstructs(pd:lsf.Product,
-	contexts:Iterable[files.Path], intention:str,
-	cache:files.Path, argv=None):
-	ctx = lsf.Context()
-	ctx.connect(pd.route)
-	ctx.load()
+def iterconstructs(factors:lsf.Context):
+	"""
+	# Iterator producing &lsf.Project instances in dependency order.
+	"""
+	q = graph.Queue()
+	q.extend(factors)
 
-	for ccontext in contexts:
-		q = graph.Queue()
-		q.extend(ctx)
-
-		while not q.terminal():
-			pj = ctx.project(list(q.take(1))[0])
-			yield plan(pj, ccontext, intention, cache, argv)
-			q.finish(pj.identifier)
+	while not q.terminal():
+		pj, = q.take(1)
+		yield factors.project(pj)
+		q.finish(pj)
 
 # Build the projects within the product.
-def build(log, traps, ctx, status, pd:lsf.Product,
+def build(meta, log, factors, status, pd:lsf.Product,
 	contexts:Iterable[files.Path], intention:str,
 	cache:files.Path, symbols):
 	"""
-	# Build all projects within product using the &contexts.
+	# Build all projects within the product using all &contexts.
 	"""
 	control, monitors, summary = status
-	metrics = []
 
-	log("[-> Processing factors for %r intent. (integrate/build)]\n" %(intention,))
+	log.xact_open(intention, "Factor Processing Instructions", {})
 	try:
 		for ccontext in contexts:
 			ctxid = ccontext.identifier
-			constants = ('integrate', 'build', ctxid,)
-			log("[-> Processing factors with %r context. (integrate/build/%s)]\n" %(ctxid, ctxid))
-			try:
-				q = graph.Queue()
-				q.extend(ctx)
-				local_plan = tools.partial(
-					plan_build, 'integrate',
-					ccontext, [intention],
-					cache, symbols, ctx
-				)
-				execution.dispatch(traps, local_plan, control, monitors, summary, "FPI", constants, q)
-			finally:
-				summary.set_field_read_type('usage', 'overall')
-				log("[<- %s (integrate/build/%s)]\n" %(summary.synopsis(), ctxid))
-
-			metrics.append(summary.metrics.export())
+			q = graph.Queue()
+			q.extend(factors)
+			local_plan = tools.partial(
+				plan_build, 'integrate',
+				ccontext, [intention],
+				cache, symbols, factors
+			)
+			execution.dispatch(meta, log, local_plan, control, monitors, summary, "FPI", q, opened=True)
 	finally:
-		summary.metrics.clear()
-		for m in metrics:
-			summary.metrics.apply(m)
-		summary.set_field_read_type('usage', 'overall')
+		log.xact_close(intention, summary.synopsis('FPI'), {})
 
-		log("[<- %s (integrate/build)]\n" %(summary.synopsis(),))
+	return summary.profile()
 
-def test(log, traps, ctx, status, pd:lsf.Product, argv, intention:str):
+def test(meta, log, factors, status, pd:lsf.Product, argv, intention:str):
 	"""
 	# Test all projects.
 	"""
@@ -159,29 +143,35 @@ def test(log, traps, ctx, status, pd:lsf.Product, argv, intention:str):
 
 	# In project dependency order.
 	q = graph.Queue()
-	q.extend(ctx)
-	local_plan = tools.partial(plan_test, intention, argv, ctx)
+	q.extend(factors)
+	local_plan = tools.partial(plan_test, intention, argv, factors)
 
-	log("[-> Testing %r build. (integrate/test)]\n" %(intention,))
+	log.xact_open(intention, "Testing %s integration." %(intention,), {})
 	try:
-		constants = ('integrate', 'test', intention,)
-		execution.dispatch(traps, local_plan, control, monitors, summary, "Fates", constants, q)
+		execution.dispatch(meta, log, local_plan, control, monitors, summary, "Fates", q, opened=True)
 	finally:
-		summary.set_field_read_type('usage', 'overall')
-		log("[<- %s (integrate/test)]\n" %(summary.synopsis(),))
+		log.xact_close(intention, summary.synopsis('Fates'), {})
 
-def integrate(log, config, fx, cc, pdr:files.Path, argv, intention='optimal'):
+	return summary.profile()
+
+def integrate(meta, log, config, fx, cc, pdr:files.Path, argv, intention='optimal'):
 	"""
 	# Complete build connecting requirements and updating indexes.
 	"""
+	from fault.transcript.metrics import Procedure
+	zero = Procedure.create()
 	os.environ['PRODUCT'] = str(pdr)
+	os.environ['INTENTION'] = intention
 	os.environ['F_PRODUCT'] = str(cc)
 	os.environ['F_EXECUTION'] = str(fx)
 	os.environ['FRAMECHANNEL'] = 'integrate'
 
-	built = tested = False
+	xbuild = config.get('disable-factor-processing', False) == False
+	xtest = config.get('disable-functionality-tests', False) == False
+
 	lanes = int(config['processing-lanes'])
 	connections = []
+	metrics = []
 	symbol_index = 0
 	symbols = argv
 
@@ -191,67 +181,67 @@ def integrate(log, config, fx, cc, pdr:files.Path, argv, intention='optimal'):
 		# This is different from &manipulate.delta's default.
 		from . import manipulate
 		if manipulate.index(lsf.Product(pdr), idx_update):
-			log(f"[!# NOTICE: updated ({idx_update}) project index using the product directory.]\n")
+			meta.notice(None, "updated (" + str(idx_update) + ") project index using the directory")
 
 	# Project Context
-	ctx = lsf.Context()
-	pd = ctx.connect(pdr)
-	ctx.load()
-	ctx.configure()
+	factors = lsf.Context()
+	pd = factors.connect(pdr)
+	factors.load()
+	factors.configure()
 
 	# Allocate and configure control and monitors.
 	control = terminal.setup()
 	control.configure(lanes+1)
-	monitors, summary = terminal.aggregate(control, proctheme, lanes, width=160)
 
-	start_time = elapsed()
-	test_usage = build_usage = 0
+	from fault.system.query import hostname
+	ts = now().select('iso')
+	host = hostname()
 
-	log(
-		"[-> Product Integration %r %s (integrate)]\n" %(
-			str(pd.route),
-			now().select('iso'),
-		)
+	log.xact_open('integrate',
+		"Product Integration (%s) of %r on %s at %s" %(
+			intention, str(pd.route), host, ts,
+		),
+		{
+			'timestamp': [ts],
+			'hostname': [host],
+			'product': [str(pd.route)],
+		}
 	)
 
+	start_time = elapsed()
+	profiles = []
 	try:
-		if config.get('disable-factor-processing', False) == False:
-			built = True
-			build_reporter = integration.emitter(integration.factor_report, log)
-			build_traps = execution.Traps.construct(
-				eox=integration.select_failures, eop=build_reporter
-			)
+		if xbuild:
+			monitors, summary = terminal.aggregate(control, proctheme, lanes, width=160)
 			status = (control, monitors, summary)
+
 			with files.Path.fs_tmpdir() as cache:
 				cd = (cache / 'build-cache').fs_mkdir()
-				build(
-					log, build_traps, ctx, status, pd,
-					[cc],
-					intention, cd,
-					symbols
-				)
-				build_usage = summary.metrics.total('usage')
+				try:
+					profiles.append(build(
+						meta, log, factors, status, pd,
+						[cc], intention, cd, symbols
+					))
+				finally:
+					control.clear()
 
-		if config.get('disable-functionality-tests', False) == False:
-			tested = True
-
-			if built:
-				control.clear()
-
+		if xtest:
 			monitors, summary = terminal.aggregate(control, fatetheme, lanes, width=160)
 			status = (control, monitors, summary)
 
-			test_reporter = integration.emitter(integration.test_report, log)
-			test_traps = execution.Traps.construct(eop=test_reporter)
-			test(log, test_traps, ctx, status, pd, [], intention)
-			test_usage = summary.metrics.total('usage')
+			try:
+				profiles.append(test(meta, log, factors, status, pd, [], intention))
+			finally:
+				control.clear()
+				control.device.drain()
 	finally:
-		duration = elapsed().decrease(start_time)
-		summary.title("Integration")
-		summary.set_field_read_type('usage', 'overall')
-		metrics = summary.metrics
-		metrics.clear()
-		metrics.update('usage', build_usage, 1)
-		metrics.update('usage', test_usage, 1)
-		metrics.commit(duration.select('millisecond') / 1000)
-		log("[<- %s %s (integrate)]\n" %(summary.synopsis(), now().select('iso'),))
+		stop_time = elapsed()
+		duration = stop_time.decrease(start_time)
+		ru = zero.usage
+		for start, stop, m in profiles:
+			ru += m.usage
+		totals = Procedure(work=zero.work, msg=zero.msg, usage=ru)
+		summary.reset(start_time, zero)
+		summary.update(start_time, zero)
+		summary.update(stop_time, totals)
+		log.emit(summary.frame('<-', "Integration", log.channel))

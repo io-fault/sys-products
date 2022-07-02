@@ -35,12 +35,13 @@ def stats(projects):
 
 	return rows
 
-def report(log, config, fx, cc, pdr, remainder):
+def report(meta, log, config, fx, cc, pdr, remainder):
 	"""
 	# Write human readable information about the product and the identified projects.
 	"""
 	if pdr.fs_type() != 'directory':
-		log("[!# ERROR: Product path is not a directory.]\n")
+		meta.warning("product path is not a directory")
+		# Nothing to do. This is not an error.
 		raise SystemExit(0)
 
 	ctx = lsf.Context()
@@ -55,11 +56,11 @@ def report(log, config, fx, cc, pdr, remainder):
 	for r in records:
 		g[r[0]].append(r)
 	c_count = len(g)
-	log(f"Product directory '{pdr!s}' contains {p_count} projects across {c_count} corpora.\n\n")
+	log.write(f"Product directory '{pdr!s}' contains {p_count} projects across {c_count} corpora.\n\n")
 
 	for c, r in g.items():
 		cp_count = len(r)
-		log(f"{c} {cp_count} projects\n")
+		log.write(f"{c} {cp_count} projects\n")
 		for corpus, iid, pj_factor, f_count, src_count, src_size in r:
 			fmt = f"  {pj_factor} {f_count} factors {src_count} sources {src_size} bytes {iid}\n"
-			log(fmt)
+			log.write(fmt)

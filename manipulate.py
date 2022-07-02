@@ -67,7 +67,7 @@ def reconnect(pd:lsf.Product, insertions, deletions):
 	fp.fs_store('\n'.join(f(x) for x in cl if x not in written and x.strip()).encode('utf-8'))
 
 # Rebuild project index from directory structure.
-def delta(log, config, fx, cc, pdr:files.Path, remainder):
+def delta(meta, log, config, fx, cc, pdr:files.Path, remainder):
 	"""
 	# Create or update the project index by scanning the filesystem.
 	"""
@@ -76,7 +76,7 @@ def delta(log, config, fx, cc, pdr:files.Path, remainder):
 
 	if index(pd, config.get('update-product-index', None)):
 		ops += 1
-		log("[!# NOTICE: updated project index using the product directory.]\n")
+		meta.notice("updated project index using the product directory")
 
 	ci, cx = connecting(config)
 	if ci or cx:
@@ -87,11 +87,11 @@ def delta(log, config, fx, cc, pdr:files.Path, remainder):
 		ops += 1
 		if pd.cache.fs_type() != 'void':
 			pd.cache.fs_void()
-			log("[!# NOTICE: product index destroyed.]\n")
+			meta.notice("product index destroyed")
 		else:
-			log("[!# NOTICE: product index does not exist.]\n")
+			meta.notice("product index does not exist")
 
 	if ops == 0:
-		log("[!# NOTICE: no product index manipulations were performed.]\n")
+		meta.notice("no product index manipulations were performed")
 
 	return pd

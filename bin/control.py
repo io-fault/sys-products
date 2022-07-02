@@ -8,6 +8,7 @@ import importlib
 from fault.vector import recognition
 from fault.system import files
 from fault.system import process
+from fault.transcript.io import Log
 
 from .. import __name__ as project_package_name
 from .. import context
@@ -17,7 +18,7 @@ restricted = {
 }
 
 required = {
-	'-x': ('field-replace', 'execution-platform'),
+	'-x': ('field-replace', 'execution-context'),
 	'-X': ('field-replace', 'construction-context'),
 
 	'-D': ('field-replace', 'product-directory'),
@@ -43,7 +44,7 @@ def configure(restricted, required, argv):
 	config = {
 		'intentions': set(),
 		'processing-lanes': '4',
-		'execution-platform': None,
+		'execution-context': None,
 		'construction-context': None,
 		'persistent-cache': None,
 		'product-directory': None,
@@ -75,7 +76,8 @@ def main(inv:process.Invocation) -> process.Exit:
 	if command_id == 'help':
 		sys.stderr.write(' '.join((
 			"pdctl",
-			"[-x platform-directory][-D product-directory]",
+				"[-x platform-directory]"
+				"[-D product-directory]",
 			"(status | delta | integrate)",
 			"project-selector",
 			"[system-symbols]\n"
@@ -92,7 +94,7 @@ def main(inv:process.Invocation) -> process.Exit:
 	cmd_oeg = recognition.legacy(oprestricted, oprequired, remainder[1:])
 	cmd_remainder = recognition.merge(config, cmd_oeg)
 
-	fx = config['execution-platform']
+	fx = config['execution-context']
 	origin, cc = context.resolve(config['construction-context'])
 
 	if config['product-directory']:
@@ -102,6 +104,6 @@ def main(inv:process.Invocation) -> process.Exit:
 		pdr = files.Path.from_absolute(pwd)
 		config['default-product'] = True
 
-	pd_oper = getattr(module, operation)
-	pd_oper(sys.stdout.write, config, fx, cc, pdr, cmd_remainder)
+	pdctl_operation = getattr(module, operation)
+	pdctl_operation(Log.stderr(), Log.stdout(), config, fx, cc, pdr, cmd_remainder)
 	return inv.exit(0)

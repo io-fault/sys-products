@@ -6,14 +6,14 @@ from collections.abc import Iterator
 
 from fault.system import files
 
-def select(local:str=None,
+def select(
+		local:object,
 		environment:str='FCC',
-		platform:str='PLATFORM',
 		home:str='HOME',
 		user:str='.cc'
 	) -> Iterator[tuple[str, files.Path]]:
 	"""
-	# Generate the possible locations of a usable context set.
+	# Generate the possible locations of construction contexts.
 	# Usually, the first existing path should be used.
 
 	# Some entries will only be present when a required environment variable
@@ -25,7 +25,7 @@ def select(local:str=None,
 	# The first element of the tuples is a string describing the origin of the path.
 	"""
 
-	if local:
+	if local is not None:
 		# A, normally, user provided path.
 		yield ('local', files.Path.from_path(local))
 
